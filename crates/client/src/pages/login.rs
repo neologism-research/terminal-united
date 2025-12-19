@@ -10,7 +10,8 @@ use ratatui::{
 };
 
 use super::helpers::centered_rect;
-use super::PageAction;
+use super::hints::{hint_key, hints_line};
+use super::{PageAction, RenderContext};
 
 /// Login page state
 pub struct LoginPage {
@@ -34,7 +35,7 @@ impl LoginPage {
     }
 
     /// Render the login screen
-    pub fn render(&self, frame: &mut Frame) {
+    pub fn render(&self, frame: &mut Frame, ctx: &RenderContext) {
         let area = frame.area();
 
         let block = Block::default()
@@ -51,11 +52,15 @@ impl LoginPage {
         };
 
         // Build the content with status message if present
-        let content = if let Some(ref status) = self.status {
-            format!("\n\n   > {}_\n\n   {}", input_text, status)
-        } else {
-            format!("\n\n   > {}_", input_text)
-        };
+        let mut content = format!("\n\n   > {}_", input_text);
+
+        if let Some(ref status) = self.status {
+            content.push_str(&format!("\n\n   {}", status));
+        }
+
+        if let Some(version) = ctx.update_available {
+            content.push_str(&format!("\n\n   [!] Update available: v{}", version));
+        }
 
         let text = Paragraph::new(content)
             .block(block)
@@ -63,9 +68,8 @@ impl LoginPage {
 
         frame.render_widget(text, inner_area);
 
-        let hint = Paragraph::new("Press [Enter] to Connect, [Esc] to Quit")
-            .alignment(Alignment::Center)
-            .style(Style::default().fg(Color::DarkGray));
+        let hint_line = hints_line(&[hint_key("Enter", "connect"), hint_key("Esc", "quit")]);
+        let hint = Paragraph::new(hint_line).alignment(Alignment::Center);
 
         let hint_area = Rect::new(
             inner_area.x,

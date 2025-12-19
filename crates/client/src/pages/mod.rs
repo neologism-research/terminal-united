@@ -3,6 +3,7 @@
 // This module defines the Page trait and re-exports all page implementations.
 // Each page is self-contained with its own state, rendering, and input handling.
 
+pub mod hints;
 pub mod login;
 pub mod room_select;
 pub mod world;
@@ -15,7 +16,7 @@ use crossterm::event::KeyCode;
 use ratatui::Frame;
 use std::collections::HashMap;
 
-use crate::network::RemotePlayer;
+use crate::network::{ChatEntry, RemotePlayer};
 
 /// Represents actions a page can request from the application
 pub enum PageAction {
@@ -32,6 +33,8 @@ pub enum PageAction {
     JoinRoom { username: String, room: String },
     /// Go back to login
     BackToLogin,
+    /// Send a chat message
+    SendChat { message: String },
 }
 
 /// The current page state of the application
@@ -50,7 +53,7 @@ impl PageState {
     /// Render the current page
     pub fn render(&mut self, frame: &mut Frame, ctx: &RenderContext) {
         match self {
-            PageState::Login(page) => page.render(frame),
+            PageState::Login(page) => page.render(frame, ctx),
             PageState::RoomSelect(page) => page.render(frame),
             PageState::World(page) => page.render(frame, ctx),
         }
@@ -72,7 +75,9 @@ pub struct RenderContext<'a> {
     pub map: &'a crate::map::Map,
     pub player: &'a crate::player::Player,
     pub remote_players: &'a HashMap<String, RemotePlayer>,
+    pub chat_log: &'a Vec<ChatEntry>,
     pub is_connected: bool,
+    pub update_available: Option<&'a String>,
 }
 
 /// Mutable context passed to pages for updating game state

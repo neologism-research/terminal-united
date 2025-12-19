@@ -9,10 +9,13 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
-use terminal_united_shared::{ClientMessage, Player, ServerMessage};
+use terminal_united_shared::{ChatEntry, ClientMessage, Player, ServerMessage};
 
 /// Thread-safe container for remote players
 pub type PlayersState = Arc<Mutex<HashMap<String, Player>>>;
+
+/// Thread-safe container for chat messages
+pub type ChatState = Arc<Mutex<Vec<ChatEntry>>>;
 
 /// Network client for communicating with the game server
 pub struct NetworkClient {
@@ -22,6 +25,10 @@ pub struct NetworkClient {
     pub players: PlayersState,
     /// Our session ID from the server
     pub session_id: Arc<Mutex<Option<String>>>,
+    /// Chat message log
+    pub chat_log: ChatState,
+    /// Our current position (for proximity calculation)
+    pub local_pos: Arc<Mutex<(i32, i32)>>,
 }
 
 impl NetworkClient {
@@ -42,6 +49,8 @@ impl NetworkClient {
         // Shared state
         let players: PlayersState = Arc::new(Mutex::new(HashMap::new()));
         let session_id_state: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+        let chat_log: ChatState = Arc::new(Mutex::new(Vec::new()));
+        let local_pos: Arc<Mutex<(i32, i32)>> = Arc::new(Mutex::new((5, 5)));
 
         // Send the Join message
         let join_msg = ClientMessage::Join {
@@ -55,6 +64,8 @@ impl NetworkClient {
         // Clone for the receive task
         let players_clone = players.clone();
         let session_id_clone = session_id_state.clone();
+        let chat_log_clone = chat_log.clone();
+        let local_pos_clone = local_pos.clone();
 
         // Spawn task to handle incoming messages
         tokio::spawn(async move {
@@ -72,11 +83,26 @@ impl NetworkClient {
                                             players.insert(player.session_id.clone(), player);
                                         }
                                     }
+                                    // Add system message
+                                    chat_log_clone.lock().await.push(ChatEntry {
+                                        username: "System".to_string(),
+                                        message: "Connected to server!".to_string(),
+                                        is_proximity: false,
+                                        is_system: true,
+                                    });
                                 }
                                 ServerMessage::PlayerJoined { player } => {
                                     let my_id = session_id_clone.lock().await.clone();
                                     if Some(&player.session_id) != my_id.as_ref() {
+                                        let name = player.username.clone();
                                         players_clone.lock().await.insert(player.session_id.clone(), player);
+                                        // Add join message
+                                        chat_log_clone.lock().await.push(ChatEntry {
+                                            username: "System".to_string(),
+                                            message: format!("{} joined", name),
+                                            is_proximity: false,
+                                            is_system: true,
+                                        });
                                     }
                                 }
                                 ServerMessage::PlayerMoved { session_id, x, y } => {
@@ -86,10 +112,36 @@ impl NetworkClient {
                                     }
                                 }
                                 ServerMessage::PlayerLeft { session_id } => {
-                                    players_clone.lock().await.remove(&session_id);
+                                    let mut players = players_clone.lock().await;
+                                    if let Some(player) = players.remove(&session_id) {
+                                        chat_log_clone.lock().await.push(ChatEntry {
+                                            username: "System".to_string(),
+                                            message: format!("{} left", player.username),
+                                            is_proximity: false,
+                                            is_system: true,
+                                        });
+                                    }
+                                }
+                                ServerMessage::ChatMessage { username, message, x, y, .. } => {
+                                    // Calculate if this is a proximity message
+                                    let (my_x, my_y) = *local_pos_clone.lock().await;
+                                    let distance = (x - my_x).abs() + (y - my_y).abs();
+                                    let is_proximity = distance <= 20; // Proximity distance
+                                    
+                                    chat_log_clone.lock().await.push(ChatEntry {
+                                        username,
+                                        message,
+                                        is_proximity,
+                                        is_system: false,
+                                    });
                                 }
                                 ServerMessage::Error { message } => {
-                                    eprintln!("Server error: {}", message);
+                                    chat_log_clone.lock().await.push(ChatEntry {
+                                        username: "Error".to_string(),
+                                        message,
+                                        is_proximity: false,
+                                        is_system: true,
+                                    });
                                 }
                             }
                         }
@@ -116,12 +168,27 @@ impl NetworkClient {
             tx,
             players,
             session_id: session_id_state,
+            chat_log,
+            local_pos,
         })
     }
 
     /// Send a move command to the server
     pub fn send_move(&self, dx: i32, dy: i32) {
         let _ = self.tx.send(ClientMessage::Move { dx, dy });
+    }
+
+    /// Send a chat message to the server
+    pub fn send_chat(&self, message: String) {
+        let _ = self.tx.send(ClientMessage::Chat { message });
+    }
+
+    /// Update local position for proximity calculations
+    pub fn update_local_pos(&self, x: i32, y: i32, runtime: &tokio::runtime::Runtime) {
+        let local_pos = self.local_pos.clone();
+        runtime.block_on(async {
+            *local_pos.lock().await = (x, y);
+        });
     }
 
     /// Get a snapshot of current remote players

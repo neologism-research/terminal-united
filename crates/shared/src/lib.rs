@@ -17,6 +17,10 @@ pub enum ClientMessage {
     #[serde(rename_all = "camelCase")]
     Move { dx: i32, dy: i32 },
 
+    /// Send a chat message
+    #[serde(rename_all = "camelCase")]
+    Chat { message: String },
+
     /// Leave the current room
     Leave,
 }
@@ -43,6 +47,16 @@ pub enum ServerMessage {
     /// A player left the room
     #[serde(rename_all = "camelCase")]
     PlayerLeft { session_id: String },
+
+    /// A chat message from another player
+    #[serde(rename_all = "camelCase")]
+    ChatMessage {
+        username: String,
+        message: String,
+        /// Position of sender for proximity calculation
+        x: i32,
+        y: i32,
+    },
 
     /// Error message
     #[serde(rename_all = "camelCase")]
@@ -73,4 +87,17 @@ pub struct RoomInfo {
     pub display_name: String,
     /// Number of players currently in the room
     pub player_count: usize,
+}
+
+/// A chat message entry for display
+#[derive(Debug, Clone)]
+pub struct ChatEntry {
+    /// Username of the sender
+    pub username: String,
+    /// The message content
+    pub message: String,
+    /// Whether this is a proximity message (nearby player)
+    pub is_proximity: bool,
+    /// Whether this is a system message
+    pub is_system: bool,
 }

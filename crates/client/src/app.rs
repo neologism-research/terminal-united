@@ -9,13 +9,16 @@ use std::collections::HashMap;
 use std::io;
 
 use crate::map::Map;
-use crate::network::{NetworkClient, RemotePlayer};
-use crate::pages::{PageAction, PageState, RenderContext, UpdateContext, WorldPage, RoomSelectPage, LoginPage};
+use crate::network::{ChatEntry, NetworkClient, RemotePlayer};
+use crate::pages::{
+    LoginPage, PageAction, PageState, RenderContext, RoomSelectPage, UpdateContext, WorldPage,
+};
 use crate::player::Player;
 
 /// Server URL for the game server
 // const SERVER_URL: &str = "ws://localhost:3000";
 const SERVER_URL: &str = "wss://j62zf3m1-3000.asse.devtunnels.ms";
+const CLIENT_VERSION: &str = "0.1.0";
 
 pub struct App {
     /// Whether the application should quit
@@ -32,6 +35,10 @@ pub struct App {
     runtime: tokio::runtime::Runtime,
     /// Cached remote players for rendering
     remote_players: HashMap<String, RemotePlayer>,
+    /// Cached chat log for rendering
+    chat_log: Vec<ChatEntry>,
+    /// Whether a new version is available
+    update_available: Option<String>,
 }
 
 impl App {
@@ -44,13 +51,18 @@ impl App {
             network: None,
             runtime: tokio::runtime::Runtime::new().expect("Failed to create tokio runtime"),
             remote_players: HashMap::new(),
+            chat_log: Vec::new(),
+            update_available: None,
         }
     }
 
     pub fn run<B: Backend>(&mut self, terminal: &mut Terminal<B>) -> io::Result<()> {
+        // Check for updates on startup
+        self.check_version();
+
         while !self.should_quit {
-            // Update remote players from network
-            self.sync_remote_players();
+            // Update remote players and chat from network
+            self.sync_network_state();
 
             // Render current page
             terminal.draw(|frame| {
@@ -58,7 +70,9 @@ impl App {
                     map: &self.map,
                     player: &self.player,
                     remote_players: &self.remote_players,
+                    chat_log: &self.chat_log,
                     is_connected: self.network.is_some(),
+                    update_available: self.update_available.as_ref(),
                 };
                 self.page.render(frame, &ctx);
             })?;
@@ -94,12 +108,21 @@ impl App {
         Ok(())
     }
 
-    /// Sync remote players from network client
-    fn sync_remote_players(&mut self) {
+    /// Sync remote players and chat log from network client
+    fn sync_network_state(&mut self) {
         if let Some(network) = &self.network {
-            self.remote_players = self.runtime.block_on(async {
-                network.players.lock().await.clone()
-            });
+            // Update local position for proximity calculations
+            network.update_local_pos(self.player.x as i32, self.player.y as i32, &self.runtime);
+
+            // Sync remote players
+            self.remote_players = self
+                .runtime
+                .block_on(async { network.players.lock().await.clone() });
+
+            // Sync chat log
+            self.chat_log = self
+                .runtime
+                .block_on(async { network.chat_log.lock().await.clone() });
         }
     }
 
@@ -123,7 +146,13 @@ impl App {
                 // Disconnect if connected
                 self.network = None;
                 self.remote_players.clear();
+                self.chat_log.clear();
                 self.page = PageState::Login(LoginPage::new());
+            }
+            PageAction::SendChat { message } => {
+                if let Some(network) = &self.network {
+                    network.send_chat(message);
+                }
             }
         }
     }
@@ -136,9 +165,9 @@ impl App {
         }
 
         // Try to connect
-        let result = self.runtime.block_on(async {
-            NetworkClient::connect(SERVER_URL, &username, &room).await
-        });
+        let result = self
+            .runtime
+            .block_on(async { NetworkClient::connect(SERVER_URL, &username, &room).await });
 
         match result {
             Ok(client) => {
@@ -149,6 +178,33 @@ impl App {
                 // Show error on room select page
                 if let PageState::RoomSelect(ref mut room_select) = self.page {
                     room_select.set_status(format!("Failed: {}", e));
+                }
+            }
+        }
+    }
+
+    /// Check for updates from the server
+    fn check_version(&mut self) {
+        let url = SERVER_URL
+            .replace("wss://", "https://")
+            .replace("ws://", "http://")
+            + "/version";
+
+        let result: Result<serde_json::Value, reqwest::Error> = self.runtime.block_on(async {
+            let client = reqwest::Client::new();
+            let resp = client
+                .get(&url)
+                .send()
+                .await?
+                .json::<serde_json::Value>()
+                .await?;
+            Ok(resp)
+        });
+
+        if let Ok(json) = result {
+            if let Some(server_version) = json.get("version").and_then(|v| v.as_str()) {
+                if server_version != CLIENT_VERSION {
+                    self.update_available = Some(server_version.to_string());
                 }
             }
         }

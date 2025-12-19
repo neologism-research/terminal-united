@@ -45,8 +45,8 @@ impl Room {
     pub fn move_player(&self, session_id: &str, dx: i32, dy: i32) -> Option<(i32, i32)> {
         if let Some(mut player) = self.players.get_mut(session_id) {
             // Simple bounds checking (adjust based on your map size)
-            let new_x = (player.x + dx).clamp(0, 200);
-            let new_y = (player.y + dy).clamp(0, 50);
+            let new_x = (player.x + dx).clamp(0, 399);
+            let new_y = (player.y + dy).clamp(0, 399);
             player.x = new_x;
             player.y = new_y;
             Some((new_x, new_y))
@@ -70,5 +70,10 @@ impl Room {
     #[allow(dead_code)]
     pub fn player_count(&self) -> usize {
         self.players.len()
+    }
+
+    /// Get a player's current position
+    pub fn get_player_position(&self, session_id: &str) -> Option<(i32, i32)> {
+        self.players.get(session_id).map(|p| (p.x, p.y))
     }
 }

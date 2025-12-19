@@ -8,8 +8,9 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
 };
 
-use super::helpers::centered_rect;
 use super::PageAction;
+use super::helpers::centered_rect;
+use super::hints::{arrows, hint_key, hints_line};
 
 /// Available room info
 #[derive(Clone)]
@@ -137,9 +138,12 @@ impl RoomSelectPage {
         }
 
         // Instructions
-        let hint = Paragraph::new("[↑/↓] Navigate  [Enter] Join  [Esc] Back")
-            .alignment(Alignment::Center)
-            .style(Style::default().fg(Color::DarkGray));
+        let hint_line = hints_line(&[
+            arrows("navigate"),
+            hint_key("Enter", "join"),
+            hint_key("Esc", "back"),
+        ]);
+        let hint = Paragraph::new(hint_line).alignment(Alignment::Center);
 
         let hint_area = Rect::new(
             inner_area.x,
