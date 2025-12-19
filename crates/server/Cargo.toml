@@ -1,0 +1,35 @@
+[package]
+name = "terminal-united-server"
+description = "Game server for Terminal United"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "terminal-united-server"
+path = "src/main.rs"
+
+[dependencies]
+terminal-united-shared.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true, features = [
+    "rt-multi-thread",
+    "sync",
+    "macros",
+    "signal",
+] }
+
+# Web framework and WebSocket
+axum = { version = "0.7", features = ["ws"] }
+tower-http = { version = "0.5", features = ["cors"] }
+
+# Concurrent data structures
+dashmap = "5"
+
+# Utilities
+uuid = { version = "1", features = ["v4"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+futures-util = "0.3"
