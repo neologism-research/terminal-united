@@ -26,7 +26,7 @@ axum = { version = "0.7", features = ["ws"] }
 tower-http = { version = "0.5", features = ["cors"] }
 
 # Concurrent data structures
-dashmap = "5"
+dashmap = "6"
 
 # Utilities
 uuid = { version = "1", features = ["v4"] }
