@@ -6,7 +6,10 @@ members = ["crates/client", "crates/server", "crates/shared"]
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-authors = ["kennysliding <kennychiu.v@gmail.com>"]
+authors = [
+    "neologism <hello@neologism.cc>",
+    "kennysliding <kennychiu.v@gmail.com>",
+]
 
 [workspace.dependencies]
 # Shared across crates

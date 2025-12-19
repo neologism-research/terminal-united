@@ -1,58 +1,44 @@
-// src/network/client.rs
-//
-// WebSocket client for connecting to the Terminal United game server.
-// Uses a simple JSON protocol over WebSocket.
-
 use futures_util::{SinkExt, StreamExt};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
-use terminal_united_shared::{ChatEntry, ClientMessage, Player, ServerMessage};
+use terminal_united_shared::{
+    ChatEntry, ClientMessage, Player, ServerMessage, DEFAULT_SPAWN_X, DEFAULT_SPAWN_Y,
+    PROXIMITY_DISTANCE,
+};
 
-/// Thread-safe container for remote players
 pub type PlayersState = Arc<Mutex<HashMap<String, Player>>>;
-
-/// Thread-safe container for chat messages
 pub type ChatState = Arc<Mutex<Vec<ChatEntry>>>;
 
-/// Network client for communicating with the game server
 pub struct NetworkClient {
-    /// Channel to send messages to the server
     tx: mpsc::UnboundedSender<ClientMessage>,
-    /// Shared state of all remote players (excluding self)
     pub players: PlayersState,
-    /// Our session ID from the server
-    pub session_id: Arc<Mutex<Option<String>>>,
-    /// Chat message log
+    #[allow(dead_code)]
+    session_id: Arc<Mutex<Option<String>>>,
     pub chat_log: ChatState,
-    /// Our current position (for proximity calculation)
     pub local_pos: Arc<Mutex<(i32, i32)>>,
 }
 
 impl NetworkClient {
-    /// Connect to the game server
     pub async fn connect(
         server_url: &str,
         username: &str,
         room_name: &str,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
-        // Connect to the WebSocket endpoint
         let ws_url = format!("{}/ws", server_url);
         let (ws_stream, _) = connect_async(&ws_url).await?;
         let (mut write, mut read) = ws_stream.split();
 
-        // Channel for outgoing messages
         let (tx, mut rx) = mpsc::unbounded_channel::<ClientMessage>();
 
-        // Shared state
         let players: PlayersState = Arc::new(Mutex::new(HashMap::new()));
         let session_id_state: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
         let chat_log: ChatState = Arc::new(Mutex::new(Vec::new()));
-        let local_pos: Arc<Mutex<(i32, i32)>> = Arc::new(Mutex::new((5, 5)));
+        let local_pos: Arc<Mutex<(i32, i32)>> =
+            Arc::new(Mutex::new((DEFAULT_SPAWN_X, DEFAULT_SPAWN_Y)));
 
-        // Send the Join message
         let join_msg = ClientMessage::Join {
             username: username.to_string(),
             room: room_name.to_string(),
@@ -123,10 +109,9 @@ impl NetworkClient {
                                     }
                                 }
                                 ServerMessage::ChatMessage { username, message, x, y, .. } => {
-                                    // Calculate if this is a proximity message
                                     let (my_x, my_y) = *local_pos_clone.lock().await;
                                     let distance = (x - my_x).abs() + (y - my_y).abs();
-                                    let is_proximity = distance <= 20; // Proximity distance
+                                    let is_proximity = distance <= PROXIMITY_DISTANCE;
                                     
                                     chat_log_clone.lock().await.push(ChatEntry {
                                         username,
@@ -173,33 +158,18 @@ impl NetworkClient {
         })
     }
 
-    /// Send a move command to the server
     pub fn send_move(&self, dx: i32, dy: i32) {
         let _ = self.tx.send(ClientMessage::Move { dx, dy });
     }
 
-    /// Send a chat message to the server
     pub fn send_chat(&self, message: String) {
         let _ = self.tx.send(ClientMessage::Chat { message });
     }
 
-    /// Update local position for proximity calculations
     pub fn update_local_pos(&self, x: i32, y: i32, runtime: &tokio::runtime::Runtime) {
         let local_pos = self.local_pos.clone();
         runtime.block_on(async {
             *local_pos.lock().await = (x, y);
         });
-    }
-
-    /// Get a snapshot of current remote players
-    #[allow(dead_code)]
-    pub async fn get_players(&self) -> HashMap<String, Player> {
-        self.players.lock().await.clone()
-    }
-
-    /// Get our session ID (if connected)
-    #[allow(dead_code)]
-    pub async fn get_session_id(&self) -> Option<String> {
-        self.session_id.lock().await.clone()
     }
 }

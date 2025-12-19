@@ -1,23 +1,16 @@
-// src/pages/login.rs
-//
-// Login page - handles username input and connects to the game server.
-// All login-related state, rendering, and input handling is contained here.
-
 use crossterm::event::KeyCode;
 use ratatui::{
     prelude::*,
     widgets::{Block, Borders, Paragraph},
 };
+use terminal_united_shared::MAX_USERNAME_LENGTH;
 
 use super::helpers::centered_rect;
 use super::hints::{hint_key, hints_line};
 use super::{PageAction, RenderContext};
 
-/// Login page state
 pub struct LoginPage {
-    /// The username being typed by the user
     username: String,
-    /// Status message (for connection feedback)
     pub status: Option<String>,
 }
 
@@ -29,21 +22,14 @@ impl LoginPage {
         }
     }
 
-    /// Set a status message (for connection errors, etc.)
-    pub fn set_status(&mut self, status: String) {
-        self.status = Some(status);
-    }
-
-    /// Render the login screen
     pub fn render(&self, frame: &mut Frame, ctx: &RenderContext) {
         let area = frame.area();
+        let inner_area = centered_rect(50, 30, area);
 
         let block = Block::default()
             .title(" Welcome to Terminal United ")
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::Cyan));
-
-        let inner_area = centered_rect(50, 30, area);
 
         let input_text = if self.username.is_empty() {
             "Type username..."
@@ -51,7 +37,6 @@ impl LoginPage {
             &self.username
         };
 
-        // Build the content with status message if present
         let mut content = format!("\n\n   > {}_", input_text);
 
         if let Some(ref status) = self.status {
@@ -80,11 +65,10 @@ impl LoginPage {
         frame.render_widget(hint, hint_area);
     }
 
-    /// Handle input specific to the login page
     pub fn handle_input(&mut self, key: KeyCode) -> PageAction {
         match key {
             KeyCode::Char(c) => {
-                if self.username.len() < 20 {
+                if self.username.len() < MAX_USERNAME_LENGTH {
                     self.username.push(c);
                 }
                 PageAction::None
@@ -95,7 +79,6 @@ impl LoginPage {
             }
             KeyCode::Enter => {
                 if !self.username.trim().is_empty() {
-                    // Go to room selection with username
                     PageAction::GoToRoomSelect {
                         username: self.username.trim().to_string(),
                     }

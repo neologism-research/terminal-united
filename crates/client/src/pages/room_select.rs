@@ -1,7 +1,3 @@
-// src/pages/room_select.rs
-//
-// Room selection page - allows users to browse and join available rooms.
-
 use crossterm::event::KeyCode;
 use ratatui::{
     prelude::*,
@@ -12,7 +8,6 @@ use super::PageAction;
 use super::helpers::centered_rect;
 use super::hints::{arrows, hint_key, hints_line};
 
-/// Available room info
 #[derive(Clone)]
 pub struct RoomInfo {
     pub name: String,
@@ -20,23 +15,16 @@ pub struct RoomInfo {
     pub max_players: usize,
 }
 
-/// Room selection page state
 pub struct RoomSelectPage {
-    /// The player's username (passed from login)
     pub username: String,
-    /// Available rooms
     rooms: Vec<RoomInfo>,
-    /// Currently selected room index
     selected: usize,
-    /// List state for rendering
     list_state: ListState,
-    /// Status message
     pub status: Option<String>,
 }
 
 impl RoomSelectPage {
     pub fn new(username: String) -> Self {
-        // Default rooms - in a real app, you'd fetch these from the server
         let rooms = vec![
             RoomInfo {
                 name: "world".to_string(),
@@ -67,22 +55,14 @@ impl RoomSelectPage {
         }
     }
 
-    /// Set a status message
     pub fn set_status(&mut self, status: String) {
         self.status = Some(status);
     }
 
-    /// Get the currently selected room name
-    pub fn selected_room(&self) -> &str {
-        &self.rooms[self.selected].name
-    }
-
-    /// Render the room selection screen
     pub fn render(&mut self, frame: &mut Frame) {
         let area = frame.area();
         let inner_area = centered_rect(60, 60, area);
 
-        // Title block
         let block = Block::default()
             .title(format!(" Select a Room - {} ", self.username))
             .borders(Borders::ALL)
@@ -90,7 +70,6 @@ impl RoomSelectPage {
 
         frame.render_widget(block.clone(), inner_area);
 
-        // Create list items
         let items: Vec<ListItem> = self
             .rooms
             .iter()
@@ -124,7 +103,6 @@ impl RoomSelectPage {
 
         frame.render_stateful_widget(list, list_area, &mut self.list_state);
 
-        // Status message
         if let Some(ref status) = self.status {
             let status_area = Rect::new(
                 inner_area.x + 2,
@@ -137,7 +115,6 @@ impl RoomSelectPage {
             frame.render_widget(status_text, status_area);
         }
 
-        // Instructions
         let hint_line = hints_line(&[
             arrows("navigate"),
             hint_key("Enter", "join"),
@@ -154,7 +131,6 @@ impl RoomSelectPage {
         frame.render_widget(hint, hint_area);
     }
 
-    /// Handle input specific to the room selection page
     pub fn handle_input(&mut self, key: KeyCode) -> PageAction {
         match key {
             KeyCode::Up | KeyCode::Char('w') | KeyCode::Char('k') => {
@@ -171,13 +147,10 @@ impl RoomSelectPage {
                 }
                 PageAction::None
             }
-            KeyCode::Enter => {
-                let room_name = self.rooms[self.selected].name.clone();
-                PageAction::JoinRoom {
-                    username: self.username.clone(),
-                    room: room_name,
-                }
-            }
+            KeyCode::Enter => PageAction::JoinRoom {
+                username: self.username.clone(),
+                room: self.rooms[self.selected].name.clone(),
+            },
             KeyCode::Esc => PageAction::BackToLogin,
             _ => PageAction::None,
         }
