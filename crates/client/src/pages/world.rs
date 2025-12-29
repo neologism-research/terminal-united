@@ -427,6 +427,8 @@ impl WorldPage {
         }
         self.last_chat_len = chat_len;
 
+        let inner_width = (area.width as usize).saturating_sub(2);
+
         let messages: Vec<ListItem> = ctx
             .chat_log
             .iter()
@@ -447,8 +449,15 @@ impl WorldPage {
                     " "
                 };
 
-                ListItem::new(format!("{} {}: {}", prefix, entry.username, entry.message))
-                    .style(style)
+                let full_text = format!("{} {}: {}", prefix, entry.username, entry.message);
+                let wrapped_lines = textwrap::wrap(&full_text, inner_width);
+
+                let lines: Vec<Line> = wrapped_lines
+                    .into_iter()
+                    .map(|s| Line::from(s.to_string()))
+                    .collect();
+
+                ListItem::new(lines).style(style)
             })
             .collect();
 
@@ -490,10 +499,16 @@ impl WorldPage {
             input_area,
         );
 
+        let title = format!(
+            " Chat (Enter to send, Esc to cancel) [{}/{}] ",
+            self.chat_buffer.len(),
+            MAX_CHAT_LENGTH
+        );
+
         let input = Paragraph::new(format!(" > {}_", self.chat_buffer))
             .block(
                 Block::default()
-                    .title(" Chat (Enter to send, Esc to cancel) ")
+                    .title(title)
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(Color::Cyan)),
             )

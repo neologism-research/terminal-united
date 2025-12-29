@@ -17,7 +17,8 @@ use uuid::Uuid;
 
 use room::Room;
 use terminal_united_shared::{
-    ClientMessage, DEFAULT_SPAWN_X, DEFAULT_SPAWN_Y, Player, ServerMessage, VERSION,
+    ClientMessage, DEFAULT_SPAWN_X, DEFAULT_SPAWN_Y, MAX_CHAT_LENGTH, Player, ServerMessage,
+    VERSION,
 };
 
 #[derive(Clone)]
@@ -164,10 +165,18 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                                 });
                             }
                         }
-                        ClientMessage::Chat { message } => {
+                        ClientMessage::Chat { mut message } => {
                             let (x, y) = room_for_recv
                                 .get_player_position(&session_id_for_recv)
                                 .unwrap_or((0, 0));
+
+                            if message.len() > MAX_CHAT_LENGTH {
+                                let mut end = MAX_CHAT_LENGTH;
+                                while end > 0 && !message.is_char_boundary(end) {
+                                    end -= 1;
+                                }
+                                message.truncate(end);
+                            }
 
                             room_for_recv.broadcast(ServerMessage::ChatMessage {
                                 username: username_for_recv.clone(),
