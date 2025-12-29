@@ -178,6 +178,8 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                                 message.truncate(end);
                             }
 
+                            info!("CHAT [{}]: {}", username_for_recv, message);
+
                             room_for_recv.broadcast(ServerMessage::ChatMessage {
                                 username: username_for_recv.clone(),
                                 message,
