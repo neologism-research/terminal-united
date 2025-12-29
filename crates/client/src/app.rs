@@ -1,5 +1,5 @@
 use crossterm::event::{self, Event, KeyEventKind};
-use ratatui::{backend::Backend, Terminal};
+use ratatui::{Terminal, backend::Backend};
 use std::collections::HashMap;
 use std::io;
 use terminal_united_shared::VERSION;
@@ -11,7 +11,10 @@ use crate::pages::{
 };
 use crate::player::Player;
 
-const SERVER_URL: &str = "wss://j62zf3m1-3000.asse.devtunnels.ms";
+// const SERVER_URL: &str = "wss://j62zf3m1-3000.asse.devtunnels.ms";
+// const SERVER_URL: &str = "ws://localhost:3000";
+// const SERVER_URL: &str = "wss://terminal-united.neologism.cc";
+const SERVER_URL: &str = "wss://shark-app-oh6d4.ondigitalocean.app";
 
 pub struct App {
     should_quit: bool,

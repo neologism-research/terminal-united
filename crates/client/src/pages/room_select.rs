@@ -31,16 +31,16 @@ impl RoomSelectPage {
                 players: 0,
                 max_players: 50,
             },
-            RoomInfo {
-                name: "lobby".to_string(),
-                players: 0,
-                max_players: 20,
-            },
-            RoomInfo {
-                name: "arena".to_string(),
-                players: 0,
-                max_players: 10,
-            },
+            // RoomInfo {
+            //     name: "lobby".to_string(),
+            //     players: 0,
+            //     max_players: 20,
+            // },
+            // RoomInfo {
+            //     name: "arena".to_string(),
+            //     players: 0,
+            //     max_players: 10,
+            // },
         ];
 
         let mut list_state = ListState::default();

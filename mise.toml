@@ -1,2 +1,4 @@
 [tools]
 rust = "1.91.1"
+node = "22"
+pnpm = "10"

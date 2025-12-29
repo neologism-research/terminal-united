@@ -16,7 +16,9 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 use room::Room;
-use terminal_united_shared::{ClientMessage, Player, ServerMessage, VERSION, DEFAULT_SPAWN_X, DEFAULT_SPAWN_Y};
+use terminal_united_shared::{
+    ClientMessage, DEFAULT_SPAWN_X, DEFAULT_SPAWN_Y, Player, ServerMessage, VERSION,
+};
 
 #[derive(Clone)]
 struct AppState {
@@ -58,10 +60,13 @@ async fn main() {
         .route("/version", get(version_handler))
         .with_state(state);
 
-    let addr = "0.0.0.0:3000";
+    let addr = "0.0.0.0:8080";
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
 
-    info!("🎮 Terminal United Server v{} listening on {}", VERSION, addr);
+    info!(
+        "🎮 Terminal United Server v{} listening on {}",
+        VERSION, addr
+    );
 
     axum::serve(listener, app).await.unwrap();
 }
@@ -106,7 +111,9 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     };
 
     if sender
-        .send(Message::Text(serde_json::to_string(&init_msg).unwrap().into()))
+        .send(Message::Text(
+            serde_json::to_string(&init_msg).unwrap().into(),
+        ))
         .await
         .is_err()
     {
@@ -114,7 +121,9 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
         return;
     }
 
-    room.broadcast(ServerMessage::PlayerJoined { player: player.clone() });
+    room.broadcast(ServerMessage::PlayerJoined {
+        player: player.clone(),
+    });
 
     let room_for_recv = room.clone();
     let session_id_for_recv = session_id.clone();
@@ -145,7 +154,9 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                 if let Ok(client_msg) = serde_json::from_str::<ClientMessage>(&text) {
                     match client_msg {
                         ClientMessage::Move { dx, dy } => {
-                            if let Some((x, y)) = room_for_recv.move_player(&session_id_for_recv, dx, dy) {
+                            if let Some((x, y)) =
+                                room_for_recv.move_player(&session_id_for_recv, dx, dy)
+                            {
                                 room_for_recv.broadcast(ServerMessage::PlayerMoved {
                                     session_id: session_id_for_recv.clone(),
                                     x,
@@ -180,7 +191,9 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
 
     info!("{} ({}) left room '{}'", username, session_id, room_name);
     room.remove_player(&session_id);
-    room.broadcast(ServerMessage::PlayerLeft { session_id: session_id.clone() });
+    room.broadcast(ServerMessage::PlayerLeft {
+        session_id: session_id.clone(),
+    });
 }
 
 async fn wait_for_join(
