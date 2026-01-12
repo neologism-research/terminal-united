@@ -1,12 +1,12 @@
 use futures_util::{SinkExt, StreamExt};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{Mutex, mpsc};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
 use terminal_united_shared::{
-    ChatEntry, ClientMessage, Player, ServerMessage, DEFAULT_SPAWN_X, DEFAULT_SPAWN_Y,
-    PROXIMITY_DISTANCE,
+    ChatEntry, ClientMessage, DEFAULT_SPAWN_X, DEFAULT_SPAWN_Y, PROXIMITY_DISTANCE, Player,
+    ServerMessage,
 };
 
 pub type PlayersState = Arc<Mutex<HashMap<String, Player>>>;
@@ -25,7 +25,6 @@ impl NetworkClient {
     pub async fn connect(
         server_url: &str,
         username: &str,
-        room_name: &str,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let ws_url = format!("{}/ws", server_url);
         let (ws_stream, _) = connect_async(&ws_url).await?;
@@ -41,7 +40,6 @@ impl NetworkClient {
 
         let join_msg = ClientMessage::Join {
             username: username.to_string(),
-            room: room_name.to_string(),
         };
         write
             .send(Message::Text(serde_json::to_string(&join_msg)?))
@@ -60,7 +58,10 @@ impl NetworkClient {
                     Ok(Message::Text(text)) => {
                         if let Ok(server_msg) = serde_json::from_str::<ServerMessage>(&text) {
                             match server_msg {
-                                ServerMessage::Init { session_id, players: init_players } => {
+                                ServerMessage::Init {
+                                    session_id,
+                                    players: init_players,
+                                } => {
                                     *session_id_clone.lock().await = Some(session_id.clone());
                                     // Add all players except ourselves
                                     let mut players = players_clone.lock().await;
@@ -81,7 +82,10 @@ impl NetworkClient {
                                     let my_id = session_id_clone.lock().await.clone();
                                     if Some(&player.session_id) != my_id.as_ref() {
                                         let name = player.username.clone();
-                                        players_clone.lock().await.insert(player.session_id.clone(), player);
+                                        players_clone
+                                            .lock()
+                                            .await
+                                            .insert(player.session_id.clone(), player);
                                         // Add join message
                                         chat_log_clone.lock().await.push(ChatEntry {
                                             username: "System".to_string(),
@@ -92,7 +96,9 @@ impl NetworkClient {
                                     }
                                 }
                                 ServerMessage::PlayerMoved { session_id, x, y } => {
-                                    if let Some(player) = players_clone.lock().await.get_mut(&session_id) {
+                                    if let Some(player) =
+                                        players_clone.lock().await.get_mut(&session_id)
+                                    {
                                         player.x = x;
                                         player.y = y;
                                     }
@@ -108,11 +114,17 @@ impl NetworkClient {
                                         });
                                     }
                                 }
-                                ServerMessage::ChatMessage { username, message, x, y, .. } => {
+                                ServerMessage::ChatMessage {
+                                    username,
+                                    message,
+                                    x,
+                                    y,
+                                    ..
+                                } => {
                                     let (my_x, my_y) = *local_pos_clone.lock().await;
                                     let distance = (x - my_x).abs() + (y - my_y).abs();
                                     let is_proximity = distance <= PROXIMITY_DISTANCE;
-                                    
+
                                     chat_log_clone.lock().await.push(ChatEntry {
                                         username,
                                         message,
@@ -159,7 +171,10 @@ impl NetworkClient {
     }
 
     pub fn send_move(&self, dx: i32, dy: i32) {
-        let _ = self.tx.send(ClientMessage::Move { dx, dy });
+        use terminal_united_shared::WorldCommand;
+        let _ = self
+            .tx
+            .send(ClientMessage::World(WorldCommand::Move { dx, dy }));
     }
 
     pub fn send_chat(&self, message: String) {

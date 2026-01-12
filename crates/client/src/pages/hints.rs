@@ -101,15 +101,3 @@ pub fn status(text: &str) -> Vec<Span<'static>> {
         Style::default().fg(Color::White),
     )]
 }
-
-pub fn arrows(action: &str) -> Vec<Span<'static>> {
-    vec![
-        Span::styled(
-            "↑↓←→",
-            Style::default()
-                .fg(HINT_KEY_COLOR)
-                .add_modifier(HINT_KEY_MODIFIER),
-        ),
-        Span::styled(format!(":{}", action), Style::default().fg(HINT_TEXT_COLOR)),
-    ]
-}

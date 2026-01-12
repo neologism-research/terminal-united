@@ -79,7 +79,7 @@ impl LoginPage {
             }
             KeyCode::Enter => {
                 if !self.username.trim().is_empty() {
-                    PageAction::GoToRoomSelect {
+                    PageAction::JoinWorld {
                         username: self.username.trim().to_string(),
                     }
                 } else {

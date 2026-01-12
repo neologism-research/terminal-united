@@ -1,4 +1,6 @@
+mod modes;
 mod room;
+mod router;
 
 use axum::{
     Router,
@@ -9,39 +11,26 @@ use axum::{
     response::IntoResponse,
     routing::get,
 };
-use dashmap::DashMap;
 use futures_util::{SinkExt, StreamExt};
-use std::sync::Arc;
 use tracing::{info, warn};
 use uuid::Uuid;
 
 use room::Room;
 use terminal_united_shared::{
-    ClientMessage, DEFAULT_SPAWN_X, DEFAULT_SPAWN_Y, MAX_CHAT_LENGTH, Player, ServerMessage,
-    VERSION,
+    ClientMessage, DEFAULT_SPAWN_X, DEFAULT_SPAWN_Y, Player, PlayerMode, ServerMessage,
+    constants::VERSION,
 };
 
 #[derive(Clone)]
-struct AppState {
-    rooms: Arc<DashMap<String, Room>>,
+pub struct AppState {
+    room: Room,
 }
 
 impl AppState {
     fn new() -> Self {
-        let rooms = Arc::new(DashMap::new());
-
-        for name in ["world", "arena", "dungeon", "tavern"] {
-            rooms.insert(name.to_string(), Room::new(name));
+        Self {
+            room: Room::new("world"),
         }
-
-        Self { rooms }
-    }
-
-    fn get_or_create_room(&self, name: &str) -> Room {
-        self.rooms
-            .entry(name.to_string())
-            .or_insert_with(|| Room::new(name))
-            .clone()
     }
 }
 
@@ -84,23 +73,26 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     let session_id = Uuid::new_v4().to_string();
     let (mut sender, mut receiver) = socket.split();
 
-    let (username, room_name) = match wait_for_join(&mut receiver).await {
-        Some(join_info) => join_info,
+    let username = match wait_for_join(&mut receiver).await {
+        Some(username) => username,
         None => {
             warn!("Connection closed before joining");
             return;
         }
     };
 
-    info!("{} ({}) joining room '{}'", username, session_id, room_name);
+    info!("{} ({}) joining world", username, session_id);
 
-    let room = state.get_or_create_room(&room_name);
+    let room = state.room.clone();
 
     let player = Player {
         session_id: session_id.clone(),
         username: username.clone(),
         x: DEFAULT_SPAWN_X,
         y: DEFAULT_SPAWN_Y,
+        mode: PlayerMode::Roaming {
+            room_id: "world".to_string(),
+        },
     };
 
     let current_players = room.add_player(player.clone());
@@ -126,9 +118,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
         player: player.clone(),
     });
 
-    let room_for_recv = room.clone();
     let session_id_for_recv = session_id.clone();
-    let username_for_recv = username.clone();
 
     let mut send_task = tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(15));
@@ -149,47 +139,13 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
         }
     });
 
+    let state_for_recv = state.clone();
+
     let mut recv_task = tokio::spawn(async move {
         while let Some(Ok(msg)) = receiver.next().await {
             if let Message::Text(text) = msg {
                 if let Ok(client_msg) = serde_json::from_str::<ClientMessage>(&text) {
-                    match client_msg {
-                        ClientMessage::Move { dx, dy } => {
-                            if let Some((x, y)) =
-                                room_for_recv.move_player(&session_id_for_recv, dx, dy)
-                            {
-                                room_for_recv.broadcast(ServerMessage::PlayerMoved {
-                                    session_id: session_id_for_recv.clone(),
-                                    x,
-                                    y,
-                                });
-                            }
-                        }
-                        ClientMessage::Chat { mut message } => {
-                            let (x, y) = room_for_recv
-                                .get_player_position(&session_id_for_recv)
-                                .unwrap_or((0, 0));
-
-                            if message.len() > MAX_CHAT_LENGTH {
-                                let mut end = MAX_CHAT_LENGTH;
-                                while end > 0 && !message.is_char_boundary(end) {
-                                    end -= 1;
-                                }
-                                message.truncate(end);
-                            }
-
-                            info!("CHAT [{}]: {}", username_for_recv, message);
-
-                            room_for_recv.broadcast(ServerMessage::ChatMessage {
-                                username: username_for_recv.clone(),
-                                message,
-                                x,
-                                y,
-                            });
-                        }
-                        ClientMessage::Leave => break,
-                        _ => {}
-                    }
+                    router::route_packet(&state_for_recv, &session_id_for_recv, client_msg).await;
                 }
             }
         }
@@ -200,7 +156,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
         _ = &mut recv_task => send_task.abort(),
     }
 
-    info!("{} ({}) left room '{}'", username, session_id, room_name);
+    info!("{} ({}) left world", username, session_id);
     room.remove_player(&session_id);
     room.broadcast(ServerMessage::PlayerLeft {
         session_id: session_id.clone(),
@@ -209,10 +165,10 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
 
 async fn wait_for_join(
     receiver: &mut futures_util::stream::SplitStream<WebSocket>,
-) -> Option<(String, String)> {
+) -> Option<String> {
     while let Some(Ok(Message::Text(text))) = receiver.next().await {
-        if let Ok(ClientMessage::Join { username, room }) = serde_json::from_str(&text) {
-            return Some((username, room));
+        if let Ok(ClientMessage::Join { username }) = serde_json::from_str(&text) {
+            return Some(username);
         }
     }
     None

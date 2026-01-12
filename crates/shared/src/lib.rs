@@ -1,12 +1,12 @@
 //! Shared types and constants for Terminal United
 
 use serde::{Deserialize, Serialize};
+pub mod constants;
 
 // =============================================================================
 // GAME CONSTANTS - Centralized configuration
 // =============================================================================
 
-pub const VERSION: &str = "0.1.0";
 pub const PROXIMITY_DISTANCE: i32 = 20;
 pub const MAX_USERNAME_LENGTH: usize = 20;
 pub const MAX_CHAT_LENGTH: usize = 200;
@@ -19,27 +19,37 @@ pub const MAP_HEIGHT: i32 = 400;
 // CLIENT -> SERVER MESSAGES
 // =============================================================================
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "type", content = "payload", rename_all = "camelCase")]
+pub enum PlayerMode {
+    Lobby,
+    Roaming { room_id: String },
+    PlayingPoker { table_id: String },
+    InCombat { battle_id: String },
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
+pub enum WorldCommand {
+    Move { dx: i32, dy: i32 },
+    Interact,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum PokerCommand {
+    Bet { amount: u32 },
+    Fold,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "payload", rename_all = "camelCase")]
 pub enum ClientMessage {
-    #[serde(rename_all = "camelCase")]
-    Join {
-        username: String,
-        room: String,
-    },
-
-    #[serde(rename_all = "camelCase")]
-    Move {
-        dx: i32,
-        dy: i32,
-    },
-
-    #[serde(rename_all = "camelCase")]
-    Chat {
-        message: String,
-    },
-
+    Join { username: String },
+    Chat { message: String },
     Leave,
+    World(WorldCommand),
+    Poker(PokerCommand),
 }
 
 // =============================================================================
@@ -87,6 +97,7 @@ pub struct Player {
     pub username: String,
     pub x: i32,
     pub y: i32,
+    pub mode: PlayerMode,
 }
 
 #[derive(Debug, Clone)]

@@ -2,7 +2,7 @@ use dashmap::DashMap;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 
-use terminal_united_shared::{Player, ServerMessage, MAP_HEIGHT, MAP_WIDTH};
+use terminal_united_shared::{MAP_HEIGHT, MAP_WIDTH, Player, ServerMessage};
 
 #[derive(Clone)]
 pub struct Room {
@@ -57,5 +57,9 @@ impl Room {
 
     pub fn get_player_position(&self, session_id: &str) -> Option<(i32, i32)> {
         self.players.get(session_id).map(|p| (p.x, p.y))
+    }
+
+    pub fn get_player(&self, session_id: &str) -> Option<Player> {
+        self.players.get(session_id).map(|p| p.value().clone())
     }
 }

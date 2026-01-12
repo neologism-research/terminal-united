@@ -1,6 +1,8 @@
 [package]
 name = "terminal-united-server"
 description = "Game server for Terminal United"
+repository = "https://github.com/neologism-research/terminal-united"
+homepage = "https://github.com/neologism-research/terminal-united"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

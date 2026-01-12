@@ -2,19 +2,18 @@ use crossterm::event::{self, Event, KeyEventKind};
 use ratatui::{Terminal, backend::Backend};
 use std::collections::HashMap;
 use std::io;
-use terminal_united_shared::VERSION;
+use terminal_united_shared::constants::VERSION;
 
 use crate::map::Map;
 use crate::network::{ChatEntry, NetworkClient, RemotePlayer};
-use crate::pages::{
-    LoginPage, PageAction, PageState, RenderContext, RoomSelectPage, UpdateContext, WorldPage,
-};
+use crate::pages::modes::WorldMode;
+use crate::pages::{GameLayout, GameMode, PageAction, PageState, RenderContext, UpdateContext};
 use crate::player::Player;
 
 // const SERVER_URL: &str = "wss://j62zf3m1-3000.asse.devtunnels.ms";
-// const SERVER_URL: &str = "ws://localhost:3000";
+const SERVER_URL: &str = "ws://localhost:8080";
 // const SERVER_URL: &str = "wss://terminal-united.neologism.cc";
-const SERVER_URL: &str = "wss://shark-app-oh6d4.ondigitalocean.app";
+// const SERVER_URL: &str = "wss://shark-app-oh6d4.ondigitalocean.app";
 
 pub struct App {
     should_quit: bool,
@@ -26,6 +25,7 @@ pub struct App {
     remote_players: HashMap<String, RemotePlayer>,
     chat_log: Vec<ChatEntry>,
     update_available: Option<String>,
+    username: String,
 }
 
 impl App {
@@ -40,6 +40,7 @@ impl App {
             remote_players: HashMap::new(),
             chat_log: Vec::new(),
             update_available: None,
+            username: String::new(),
         }
     }
 
@@ -60,6 +61,7 @@ impl App {
                     chat_log: &self.chat_log,
                     is_connected: self.network.is_some(),
                     update_available: self.update_available.as_ref(),
+                    username: &self.username,
                 };
                 self.page.render(frame, &ctx);
             })?;
@@ -111,17 +113,8 @@ impl App {
         match action {
             PageAction::None => {}
             PageAction::Quit => self.should_quit = true,
-            PageAction::GoToRoomSelect { username } => {
-                self.page = PageState::RoomSelect(RoomSelectPage::new(username));
-            }
-            PageAction::JoinRoom { username, room } => {
-                self.handle_join_room(username, room);
-            }
-            PageAction::BackToLogin => {
-                self.network = None;
-                self.remote_players.clear();
-                self.chat_log.clear();
-                self.page = PageState::Login(LoginPage::new());
+            PageAction::JoinWorld { username } => {
+                self.handle_join_world(username);
             }
             PageAction::SendChat { message } => {
                 if let Some(network) = &self.network {
@@ -131,23 +124,25 @@ impl App {
         }
     }
 
-    fn handle_join_room(&mut self, username: String, room: String) {
-        if let PageState::RoomSelect(ref mut room_select) = self.page {
-            room_select.set_status(format!("Joining {}...", room));
+    fn handle_join_world(&mut self, username: String) {
+        if let PageState::Login(ref mut login_page) = self.page {
+            login_page.status = Some("Joining world...".to_string());
         }
 
         let result = self
             .runtime
-            .block_on(async { NetworkClient::connect(SERVER_URL, &username, &room).await });
+            .block_on(async { NetworkClient::connect(SERVER_URL, &username).await });
 
         match result {
             Ok(client) => {
+                self.username = username.clone();
                 self.network = Some(client);
-                self.page = PageState::World(WorldPage::new(username));
+                let mode = GameMode::World(WorldMode::new());
+                self.page = PageState::InGame(GameLayout::new(mode));
             }
             Err(e) => {
-                if let PageState::RoomSelect(ref mut room_select) = self.page {
-                    room_select.set_status(format!("Failed: {}", e));
+                if let PageState::Login(ref mut login_page) = self.page {
+                    login_page.status = Some(format!("Failed: {}", e));
                 }
             }
         }
