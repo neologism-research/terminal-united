@@ -1,0 +1,19 @@
+packages:
+  - apps/*
+  - packages/*
+  - docs
+
+blockExoticSubdeps: false
+autoInstallPeers: false
+
+onlyBuiltDependencies:
+  - esbuild
+  - msgpackr-extract
+
+allowBuilds:
+  esbuild: true
+  msgpackr-extract: true
+  sharp: true
+
+patchedDependencies:
+  "@astrojs/mdx@4.3.14": patches/@astrojs__mdx@4.3.14.patch

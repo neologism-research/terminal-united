@@ -1,0 +1,18 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg18-trixie
+    restart: always
+    shm_size: 128mb
+    environment:
+      POSTGRES_USER: terminal_united
+      POSTGRES_PASSWORD: terminal_united
+      POSTGRES_DB: terminal_united
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./.cache/postgresql:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U terminal_united -d terminal_united"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
